@@ -15,9 +15,7 @@ import 'package:ruleta/scr/final.dart';
 import 'package:ruleta/services/ruleta_api_service.dart';
 import 'package:ruleta/models/api_models.dart';
 import 'package:ruleta/services/audio_manager.dart';
-
-
-
+import 'package:ruleta/widget_loader.dart';
 
 class RuletaGameApp extends StatelessWidget {
   const RuletaGameApp({super.key});
@@ -96,7 +94,8 @@ class _RouletteScreenState extends State<RouletteScreen>
   bool _isBlinking = false;
   double _blinkIntensity = 0.0;
   Timer? _blinkTimer;
-  bool _blinkIncreasing = true;
+  final bool _blinkIncreasing = true;
+  bool _showDarkOverlay = true; // Controla la visibilidad de la capa oscura
   // Variable _shouldStop eliminada (no se usaba)
 
   List<RouletteItem> get _opcionesDisponibles =>
@@ -137,14 +136,27 @@ class _RouletteScreenState extends State<RouletteScreen>
           final finalAngle = _animation.value;
           final finalIndex = _targetCategoryIndex;
           final labelBajoSelector = finalIndex != null ? _items[finalIndex].label : 'null';
-          final objetivo = _ordenCategorias[_progresoActual];
-
-          setState(() {
-            _highlightedIndex = objetivo;
-            _selectedOption = _items[objetivo].label;
-            _isSpinning = false;
-          });
-          _startBlinkingEffect();
+          
+          // Verificar que el progreso actual sea válido
+          if (_progresoActual < _ordenCategorias.length) {
+            final objetivo = _ordenCategorias[_progresoActual];
+            
+            setState(() {
+              _highlightedIndex = objetivo;
+              _selectedOption = _items[objetivo].label;
+              _isSpinning = false;
+              _isSpinButtonEnabled = true; // Asegurar que el botón se habilite
+            });
+            _startBlinkingEffect();
+          } else {
+            // Si no hay más categorías disponibles, habilitar el botón
+            setState(() {
+              _isSpinning = false;
+              _isSpinButtonEnabled = true;
+              _highlightedIndex = null;
+              _selectedOption = null;
+            });
+          }
 
           // Reproducir sonido de selección de categoría SOLO si el sonido está activado
           if (_isSoundOn) {
@@ -152,7 +164,7 @@ class _RouletteScreenState extends State<RouletteScreen>
             await player.play(AssetSource('sounds/Sonidocuandoseescogecategoria.mp3'));
           }
 
-              _redirectionTimer = Timer(const Duration(milliseconds: 2500), () {
+              _redirectionTimer = Timer(const Duration(milliseconds: 1500), () {
       if (mounted) {
         print('TIMER EJECUTADO: Llamando a _navigateToSelected()');
         _navigateToSelected();
@@ -203,6 +215,12 @@ class _RouletteScreenState extends State<RouletteScreen>
       // Obtener categorías de la API
       final categories = await RuletaApiService.getCategories();
       
+      // Debug: Imprimir información sobre las categorías recibidas
+      print('🔍 DEBUG: Categorías recibidas de la API: ${categories.length}');
+      for (var cat in categories) {
+        print('  - ID: ${cat.id}, Nombre: "${cat.name}", LocalName: "${cat.localName}"');
+      }
+      
       // Si la API devuelve vacío, usa las categorías por defecto
       // Mapa fijo de iconos por categoría
       final iconMap = {
@@ -229,16 +247,11 @@ class _RouletteScreenState extends State<RouletteScreen>
               iconAsset: iconMap[category.localName] ?? category.iconAsset,
             )).toList();
 
-      // Mostrar SnackBar solo si la API devolvió vacío
-      if (categories.isEmpty && mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Advertencia: No se recibieron categorías de la API. Usando categorías por defecto.'),
-            backgroundColor: Colors.orange,
-            duration: Duration(seconds: 3),
-            behavior: SnackBarBehavior.floating,
-          ),
-        );
+      // Usar categorías de la API si están disponibles, sino usar las por defecto
+      if (categories.isEmpty) {
+        print('ℹ️ INFO: Usando categorías por defecto (comportamiento normal)');
+      } else {
+        print('✅ ÉXITO: Usando ${categories.length} categorías de la API');
       }
 
       // Print para depuración
@@ -453,15 +466,44 @@ class _RouletteScreenState extends State<RouletteScreen>
   }
 
   // 2. Al cargar las categorías (después de cargar _items), genera el orden aleatorio
-  void _generarOrdenAleatorio() {
-    _ordenCategorias = List.generate(_items.length, (i) => i);
-    _ordenCategorias.shuffle();
-    _progresoActual = 0;
-    // Log para depuración: imprime el orden aleatorio generado
-    print('ORDEN ALEATORIO GENERADO: $_ordenCategorias');
-    print('CATEGORÍAS EN ORDEN:');
+  //    solo con las categorías que no han sido respondidas correctamente
+  void _generarOrdenAleatorio({bool mantenerProgreso = false}) {
+    // Si no hay que mantener el progreso, reiniciar categorías jugadas
+    if (!mantenerProgreso) {
+      _categoriasJugadas.clear();
+    }
+    
+    // Crear lista de índices de categorías que NO han sido respondidas correctamente
+    final categoriasDisponibles = <int>[];
+    for (int i = 0; i < _items.length; i++) {
+      if (!_categoriasJugadas.contains(_items[i].label)) {
+        categoriasDisponibles.add(i);
+      }
+    }
+    
+    // Si no hay categorías disponibles, reiniciar todo
+    if (categoriasDisponibles.isEmpty) {
+      _categoriasJugadas.clear();
+      _progresoActual = 0;
+      _puntos = 0;
+      _generarOrdenAleatorio(mantenerProgreso: false);
+      return;
+    }
+    
+    // Mezclar las categorías disponibles
+    categoriasDisponibles.shuffle();
+    _ordenCategorias = categoriasDisponibles;
+    
+    // Si mantenemos el progreso, no reiniciamos _progresoActual
+    if (!mantenerProgreso) {
+      _progresoActual = 0;
+    }
+    
+    // Log para depuración
+    print('NUEVO ORDEN ALEATORIO (${_ordenCategorias.length} categorías):');
     for (final idx in _ordenCategorias) {
-      print('  $idx: ${_items[idx].label}');
+      final estado = _categoriasJugadas.contains(_items[idx].label) ? '[COMPLETADA]' : '[PENDIENTE]';
+      print('  $idx: ${_items[idx].label} $estado');
     }
   }
 
@@ -497,18 +539,50 @@ class _RouletteScreenState extends State<RouletteScreen>
     }
   }
 
-  // Llama a _generarOrdenAleatorio() después de cargar _items en _loadDataFromApi()
   // Elimina cualquier llamada a setState o a _generarOrdenAleatorio() que esté fuera de métodos.
   // Asegúrate de que solo haya una función _generarOrdenAleatorio().
 
   // 3. En _spin(), usa el índice de _ordenCategorias[_progresoActual] como objetivo
   void _spin({bool randomSpin = true}) {
-  if (!mounted) return;
-    if (_isSpinning || _progresoActual >= _ordenCategorias.length) return;
+    if (!mounted) return;
+    
+    // Verificar si hay categorías disponibles para girar
+    final categoriasDisponibles = _items.where((item) => !_categoriasJugadas.contains(item.label)).toList();
+    if (categoriasDisponibles.isEmpty) {
+      print('No hay categorías disponibles para girar');
+      return;
+    }
+    
+    // Si el progreso actual es mayor o igual al número de categorías, reiniciar el progreso
+    if (_progresoActual >= _ordenCategorias.length) {
+      print('⚠️ Progreso actual ($_progresoActual) excede el número de categorías (${_ordenCategorias.length}). Reiniciando progreso...');
+      _progresoActual = 0;
+      
+      // Verificar si hay categorías disponibles para jugar
+      final categoriasPendientes = _items.where((item) => !_categoriasJugadas.contains(item.label)).toList();
+      if (categoriasPendientes.isEmpty) {
+        print('⚠️ No hay categorías pendientes para jugar');
+        return;
+      }
+      
+      // Si hay categorías pendientes pero no en el orden actual, regenerar el orden
+      _generarOrdenAleatorio(mantenerProgreso: true);
+      print('🔄 Orden regenerado. Nuevo progreso: $_progresoActual, Categorías en orden: ${_ordenCategorias.map((i) => _items[i].label).toList()}');
+    }
+    
+    if (_isSpinning) {
+      print('⚠️ Ya hay un giro en progreso');
+      return;
+    }
+    
     _autoSpinTimer?.cancel();
+    print('Iniciando giro con _progresoActual=$_progresoActual, categorías restantes: ${categoriasDisponibles.length}');
     setState(() {
       _isSpinButtonEnabled = false;
       _isSpinning = true;
+      _highlightedIndex = null;
+      _showDarkOverlay = false; // Ocultar la capa oscura al girar
+      _stopBlinkingEffect();
     });
     // --- SONIDO DE GIRO ---
     if (_isSoundOn) {
@@ -535,7 +609,7 @@ class _RouletteScreenState extends State<RouletteScreen>
     final targetAngle = _currentRotationAngle + baseRotation + (360 - centerAngleOfSector) - (_currentRotationAngle % 360);
     //print('SPIN DEBUG: targetIndex=$targetIndex, label=${_items[targetIndex].label}, centerAngleOfSector=$centerAngleOfSector, targetAngle=$targetAngle');
 
-    bool _finalHighlightSet = false;
+    bool finalHighlightSet = false;
     _animation = Tween<double>(
       begin: _currentRotationAngle,
       end: targetAngle,
@@ -544,7 +618,7 @@ class _RouletteScreenState extends State<RouletteScreen>
         if (_isSpinning) {
           double progress = _controller.value;
           if (progress < 0.9) {
-            _finalHighlightSet = false;
+            finalHighlightSet = false;
             final categoriasDisponibles = <int>[];
             for (int i = 0; i < _items.length; i++) {
               if (!_categoriasJugadas.contains(_items[i].label)) {
@@ -558,9 +632,9 @@ class _RouletteScreenState extends State<RouletteScreen>
               _highlightedIndex = _getSelectedIndex(_animation.value);
             }
           } else {
-            if (!_finalHighlightSet && _targetCategoryIndex != null) {
+            if (!finalHighlightSet && _targetCategoryIndex != null) {
               _highlightedIndex = _targetCategoryIndex!;
-              _finalHighlightSet = true;
+              finalHighlightSet = true;
               print('OBJETIVO FINAL: índice $_targetCategoryIndex = "${_items[_targetCategoryIndex!].label}"');
             }
           }
@@ -615,50 +689,37 @@ class _RouletteScreenState extends State<RouletteScreen>
       _isSpinButtonEnabled = false;
     });
     _redirectionTimer?.cancel();
-    _redirectionTimer = Timer(const Duration(seconds: 3), () {
+    _redirectionTimer = Timer(const Duration(seconds: 2), () {
       print('=== TIMER EJECUTADO - Creando destino ===');
       Widget destination;
       print('SWITCH DEBUG: Evaluando switch con _selectedOption: "$_selectedOption"');
       print('SWITCH DEBUG: Tipo de _selectedOption: ${_selectedOption.runtimeType}');
       print('SWITCH DEBUG: Longitud de _selectedOption: ${_selectedOption?.length}');
+      print('SWITCH DEBUG: Códigos ASCII de _selectedOption: ${_selectedOption?.codeUnits}');
+      print('SWITCH DEBUG: _selectedOption == "Curiosamente Mental": ${_selectedOption == "Curiosamente Mental"}');
+      print('SWITCH DEBUG: _selectedOption == "Curiosamente": ${_selectedOption == "Curiosamente"}');
       
       try {
-        switch (_selectedOption) {
-        case 'Mente Sana':
-          print('SWITCH DEBUG: Caso Mente Sana - Navegando a QuestionTestQuiz');
-          destination = QuestionTestQuiz();
-          break;
-        case 'Curiosamente': // Nombre correcto de la API
-        case 'Curiosamente Mental':
-          print('SWITCH DEBUG: Caso Curiosamente - Navegando a CuriosamenteQuiz');
-          destination = CuriosamenteQuiz();
-          break;
-        case 'Q+ve':
-        case 'Q+VE':
-        case 'Q+Ve':
-        case 'Q+vE':
-          print('SWITCH DEBUG: Caso Q+VE/Q+ve - Navegando a QmasQuiz');
-          destination = QmasQuiz();
-          break;
-        case 'Clave Mental':
-          print('SWITCH DEBUG: Caso Clave Mental - Navegando a ClaveMentalQuiz');
-          destination = ClaveMentalQuiz();
-          break;
-        case 'Mitos Desmentidos':
-          print('SWITCH DEBUG: Caso Mitos Desmentidos - Navegando a DesmintendoQuiz');
-          destination = DesmintendoQuiz();
-          break;
-        default:
-          print('SWITCH DEBUG: Caso DEFAULT - No se encontró match para "$_selectedOption"');
+        print('FACTORY DEBUG: Intentando crear widget para: "$_selectedOption"');
+        
+        // Verificar si la categoría es soportada
+        if (WidgetLoader.isCategorySupported(_selectedOption!)) {
+          print('WIDGET_LOADER DEBUG: Categoría soportada, creando widget...');
+          destination = WidgetLoader.createWidget(_selectedOption!);
+          print('WIDGET_LOADER DEBUG: Widget creado exitosamente: ${destination.runtimeType}');
+        } else {
+          print('WIDGET_LOADER DEBUG: Categoría no soportada: "$_selectedOption"');
+          print('WIDGET_LOADER DEBUG: Categorías soportadas: ${WidgetLoader.getAvailableCategories()}');
           destination = Scaffold(
-            appBar: AppBar(title: Text('No definido')),
-            body: Center(child: Text('No se encontró pantalla para $_selectedOption')),
+            appBar: AppBar(title: const Text('Categoría no encontrada')),
+            body: Center(child: Text('No se encontró pantalla para: $_selectedOption')),
           );
         }
       } catch (e) {
-        print('ERROR en switch: $e');
+        print('ERROR en factory: $e');
+        print('ERROR en factory: Stack trace: ${StackTrace.current}');
         destination = Scaffold(
-          appBar: AppBar(title: Text('Error')),
+          appBar: AppBar(title: const Text('Error')),
           body: Center(child: Text('Error al crear destino: $e')),
         );
       }
@@ -678,49 +739,96 @@ class _RouletteScreenState extends State<RouletteScreen>
       // Asegurar que el modo de pantalla se mantenga al regresar del quiz
       SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
       
+      if (mounted) {
         setState(() {
-          // Solo marcar como jugada si la respuesta fue correcta (resultado == 1)
+          bool juegoCompletado = false;
+          
           if (resultado == 1 && _selectedOption != null) {
+            // Respuesta correcta
             _categoriasJugadas.add(_selectedOption!);
             _puntos++;
             _progresoActual++;
+            
+            // Verificar si todas las categorías han sido completadas correctamente
+            if (_categoriasJugadas.length >= _items.length) {
+              juegoCompletado = true;
+              print('✅ Todas las categorías completadas correctamente');
+            } else if (_progresoActual >= _ordenCategorias.length) {
+              // Si se completó el orden actual pero aún hay categorías por responder
+              print('🔄 Generando nuevo orden con las categorías restantes');
+              _generarOrdenAleatorio(mantenerProgreso: true);
+              print('Nuevo orden generado con ${_ordenCategorias.length} categorías restantes');
+            }
+          } else if (resultado == 0) {
+            // Respuesta incorrecta - Generar nuevo orden aleatorio
+            print('❌ Respuesta incorrecta, generando nuevo orden');
+            
+            // No incrementar el progreso en respuestas incorrectas
+            // Solo generar un nuevo orden con las categorías pendientes
+            final _ = _ordenCategorias.length; // Solo para referencia de depuración
+            _generarOrdenAleatorio(mantenerProgreso: true);
+            
+            print('🔀 Nuevo orden aleatorio generado después de respuesta incorrecta');
+            print('Se mantienen las ${_categoriasJugadas.length} categorías ya completadas');
+            print('Categorías en el nuevo orden (${_ordenCategorias.length}): ${_ordenCategorias.map((i) => _items[i].label).toList()}');
+            
+            // Si el progreso era mayor que el número de categorías, reiniciarlo
+            if (_progresoActual >= _ordenCategorias.length) {
+              _progresoActual = 0;
+              print('🔄 Progreso reiniciado a 0 porque excedía el número de categorías');
+            }
           }
+          
+// Asegurarse de que el botón de girar esté habilitado
           _isSpinButtonEnabled = true;
           _selectedOption = null;
           _highlightedIndex = null;
+          _showDarkOverlay = true; // Asegurar que la capa oscura sea visible
+          
+          // Verificar si hay categorías disponibles para girar
+          final categoriasDisponibles = _items.where((item) => !_categoriasJugadas.contains(item.label)).toList();
+          if (categoriasDisponibles.isEmpty) {
+            print('⚠️ No hay más categorías disponibles para jugar');
+            juegoCompletado = true;
+          } else {
+            print('🔄 Categorías disponibles para el próximo giro: ${categoriasDisponibles.map((e) => e.label).toList()}');
+          }
+          
+          // Si el juego está completado, navegar a la pantalla final
+          if (juegoCompletado) {
+            // Determinar el mensaje según los puntos y el usuario
+            String mensajeFinal;
+            String textoSecundario;
+            
+            if (_puntos >= 5 && _esMismoUsuario) {
+              mensajeFinal = '¡Gracias por participar!';
+              textoSecundario = '+5 puntos, por tu gran\ndesempeño.';
+              print('🎯 Usuario con 5 puntos y mismo usuario: Mostrando mensaje de éxito');
+            } else {
+              mensajeFinal = '¡Gracias por participar!';
+              textoSecundario = 'Cada vez está más cerca\nde conocer sobre tu salud mental';
+              print('📈 Usuario sin 5 puntos o usuario diferente: Mostrando mensaje de motivación');
+            }
+            
+            // Usar un post-frame callback para asegurar que el setState se complete
+            WidgetsBinding.instance.addPostFrameCallback((_) {
+              Navigator.pushReplacement(
+                context,
+                MaterialPageRoute(builder: (_) => PantallaFinJuego(
+                  mensajeFinal: mensajeFinal,
+                  rutaImagen: 'assets/animations/copa-con-confetti.gif',
+                  textoSecundario: textoSecundario,
+                )),
+              );
+            });
+          }
+        });
         
         // Reanudar el audio cuando regrese de la pantalla de quiz
         if (_isSoundOn) {
           _audioPlayer.resume();
         }
-      });
-        // Verificar si todas las categorías han sido completadas correctamente
-        if (_progresoActual >= _ordenCategorias.length) {
-          // Determinar el mensaje según los puntos y el usuario
-          String mensajeFinal;
-          String textoSecundario;
-          
-          if (_puntos >= 5 && _esMismoUsuario) {
-            // Usuario tiene 5 puntos y es el mismo que inició en main.dart
-            mensajeFinal = '¡Gracias por participar!';
-            textoSecundario = '+5 puntos, por tu gran\ndesempeño.';
-            print('🎯 Usuario con 5 puntos y mismo usuario: Mostrando mensaje de éxito');
-          } else {
-            // Usuario no tiene 5 puntos o no es el mismo
-            mensajeFinal = '¡Gracias por participar!';
-            textoSecundario = 'Cada vez está más cerca\nde conocer sobre tu salud mental';
-            print('📈 Usuario sin 5 puntos o usuario diferente: Mostrando mensaje de motivación');
-          }
-          
-          Navigator.pushReplacement(
-            context,
-            MaterialPageRoute(builder: (_) => PantallaFinJuego(
-              mensajeFinal: mensajeFinal,
-              rutaImagen: 'assets/animations/copa-con-confetti.gif',
-              textoSecundario: textoSecundario,
-            )),
-          );
-        }
+      }
       });
     });
   }
@@ -853,9 +961,10 @@ class _RouletteScreenState extends State<RouletteScreen>
                 textAlign: TextAlign.center,
                 style: TextStyle(
                   fontFamily: 'Montserrat',
-                  fontWeight: FontWeight.w600,
+                  fontWeight: FontWeight.w900,
                   color: Colors.white,
-                  fontSize: fontSize,
+                  fontSize: min(screenWidth * 0.048, 20.0),
+                  height: 1.2,
                 ),
               ),
               SizedBox(height: textSpacing),
@@ -883,45 +992,52 @@ class _RouletteScreenState extends State<RouletteScreen>
                           ),
                         ),
                       ),
-                      // Botón central de girar/parar
-                      GestureDetector(
-                        onTap: _isSpinButtonEnabled
-                            ? () {
-                                _spin();
-                              }
-                            : null,
-                        child: ClipOval(
-                          child: Container(
-                            width: rouletteSize * 0.20,
-                            height: rouletteSize * 0.20,
-                            color: _isSpinButtonEnabled
-                                ? Colors.white
-                                : Colors.grey[400],
-                            child: Center(
-                              child: Text(
-                                'GIRAR',
-                                style: TextStyle(
-                                  fontSize: buttonFontSize,
-                                  fontWeight: FontWeight.w900,
-                                  color: Colors.black,
-                                ),
-                              ),
-                            ),
+                      // Capa oscura que se oculta al presionar el botón
+                      if (_showDarkOverlay)
+                        Container(
+                          width: rouletteSize,
+                          height: rouletteSize,
+                          decoration: BoxDecoration(
+                            color: Colors.black.withOpacity(0.3),
+                            shape: BoxShape.circle,
                           ),
                         ),
-                      ),
-                      // Triángulo alineado con el borde superior del botón, apuntando hacia arriba
+                      // Botón central con la imagen de girar
                       Positioned(
-                        left: (rouletteSize - rouletteSize * 0.1) / 2,
-                        top: rouletteSize / 2 - rouletteSize * 0.20 / 2 - rouletteSize * 0.1 + rouletteSize * 0.058,
-                        child: Transform.rotate(
-                          angle: 3.1416,
-                          child: ClipPath(
-                            clipper: TriangleSelectorClipper(),
-                            child: Container(
-                              width: rouletteSize * 0.1,
-                              height: rouletteSize * 0.070,
-                              color: _isSpinButtonEnabled ? Colors.white : Colors.grey[400],
+                        left: (rouletteSize - rouletteSize * 0.3) / 2,
+                        top: (rouletteSize - rouletteSize * 0.3) / 2,
+                        child: GestureDetector(
+                          onTap: _isSpinButtonEnabled ? _spin : null,
+                          child: Container(
+                            width: rouletteSize * 0.3,
+                            height: rouletteSize * 0.3,
+                            child: Stack(
+                              alignment: Alignment.center,
+                              children: [
+                                // Imagen de fondo del botón
+                                Image.asset(
+                                  'assets/icons/Btn-parar-sintexto 02.png',
+                                  width: rouletteSize * 0.3,
+                                  height: rouletteSize * 0.3,
+                                  fit: BoxFit.contain,
+                                  color: _isSpinButtonEnabled ? null : Colors.grey[400],
+                                ),
+                                // Texto GIRAR centrado
+                                Center(
+                                  child: Text(
+                                    'GIRAR',
+                                    style: TextStyle(
+                                      fontSize: rouletteSize * 0.05,
+                                      fontFamily: 'Montserrat',
+                                      fontWeight: FontWeight.w900,
+                                      color: Colors.black,
+                                      letterSpacing: 1.5,
+                                     
+                                    ),
+                                    textAlign: TextAlign.center,
+                                  ),
+                                ),
+                              ],
                             ),
                           ),
                         ),
@@ -971,10 +1087,12 @@ class WheelPainter extends CustomPainter {
       case 'Mente Sana':
         return 'MENTE\nSANA';
       case 'Curiosamente': // Nombre correcto de la API
-        return 'CURIOSA\nMENTE';
+        return 'CURIOSAMENTE';
       case 'Curiosamente Mental': // Agregado para mostrar CURIOSAMENTE
-        return 'CURIOSA\nMENTE';
+        return 'CURIOSAMENTE';
       case 'Q+ve': // Nombre correcto de la API (minúscula)
+        return 'Q+VE';
+      case 'Q+VE': // Nombre correcto de la API
         return 'Q+VE';
       case 'Clave Mental':
         return 'CLAVE\nMENTAL';
@@ -1019,6 +1137,8 @@ class WheelPainter extends CustomPainter {
       ..color = Colors.white
       ..style = PaintingStyle.stroke
       ..strokeWidth = 10.0;
+      
+    // Dibujar el borde blanco de la ruleta
     canvas.drawCircle(center, radius, borderPaint);
 
     for (int i = 0; i < items.length; i++) {
@@ -1156,19 +1276,3 @@ class WheelPainter extends CustomPainter {
         oldDelegate.blinkIntensity != blinkIntensity;
   }
 }
-
-class TriangleSelectorClipper extends CustomClipper<Path> {
-  @override
-  Path getClip(Size size) {
-    final path = Path();
-    path.moveTo(0, 0);
-    path.lineTo(size.width, 0);
-    path.lineTo(size.width / 2, size.height);
-    path.close();
-    return path;
-  }
-
-  @override
-  bool shouldReclip(covariant CustomClipper<Path> oldClipper) => false;
-}
-

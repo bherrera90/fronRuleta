@@ -6,7 +6,6 @@ import 'package:ruleta/services/ruleta_api_service.dart';
 import 'package:ruleta/models/api_models.dart';
 import 'package:ruleta/services/audio_manager.dart';
 import 'package:audioplayers/audioplayers.dart';
-import 'package:ruleta/scr/RuletaGame.dart';
 
 class CuriosamenteQuiz extends StatefulWidget {
   const CuriosamenteQuiz({super.key});
@@ -342,7 +341,7 @@ class _CuriosamenteQuizState extends State<CuriosamenteQuiz>
               width: double.infinity,
               decoration: const BoxDecoration(
                 image: DecorationImage(
-                  image: AssetImage('assets/images/back-azul-salud-menatl.png'),
+                  image: AssetImage('assets/images/Back-Ruleta.png'),
                   fit: BoxFit.cover,
                 ),
               ),
@@ -405,16 +404,59 @@ class _CuriosamenteQuizState extends State<CuriosamenteQuiz>
         ],
       ),
       child: Column(
+         mainAxisAlignment: MainAxisAlignment.center,
+
+        crossAxisAlignment: CrossAxisAlignment.center,
         children: [
-          Text(
-            _statusMessage,
-            style: TextStyle(
-              fontFamily: 'Montserrat',
-              color: _getStatusColor(_statusMessage),
-              fontWeight: FontWeight.w900,
-              fontSize: screenWidth * 0.063,
-            ),
-          ),
+                    // Contenedor para el mensaje de estado
+
+          Container(
+
+            width: double.infinity,
+
+            padding: const EdgeInsets.symmetric(horizontal: 15, vertical: 5),
+
+            child: Center(
+
+              child: ConstrainedBox(
+
+                constraints: BoxConstraints(
+
+                  maxWidth: screenWidth * 0.9, // Limitar el ancho máximo al 90% del ancho de la pantalla
+
+                ),
+
+                child: Text(
+
+                  _statusMessage,
+
+                  textAlign: TextAlign.center,
+
+                  style: TextStyle(
+
+                    fontFamily: 'Montserrat',
+
+                    color: _getStatusColor(_statusMessage),
+
+                    fontWeight: FontWeight.w900,
+
+                    fontSize: screenWidth * 0.055, // Tamaño de fuente ligeramente más pequeño
+
+                    height: 1.2,
+
+                    letterSpacing: 0.5,
+
+                  ),
+
+                  maxLines: 2,
+
+                  overflow: TextOverflow.ellipsis,
+
+                ),
+              ),
+              ),
+
+              ),
           const SizedBox(height: 10),
           if (_currentQuestion != null)
             Text(
@@ -559,17 +601,52 @@ class TimerPainter extends CustomPainter {
 
     final progressColor = timeLeft > 10 ? Colors.white : const Color(0xFFEA4335);
 
+    // Fondo transparente
+    final transparentPaint = Paint()
+      ..color = Colors.transparent
+      ..style = PaintingStyle.fill;
+    
+    // Dibujar el círculo de fondo transparente
+    canvas.drawCircle(center, radius, transparentPaint);
+
+    // Borde exterior blanco
+    final outerBorderPaint = Paint()
+      ..color = Colors.white
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = strokeWidth * 0.3
+      ..strokeCap = StrokeCap.round;
+    
+    // Borde interior blanco
+    final innerBorderPaint = Paint()
+      ..color = Colors.white
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = strokeWidth * 0.3
+      ..strokeCap = StrokeCap.round;
+    
+    // Dibujar bordes
+    canvas.drawCircle(center, radius - strokeWidth * 0.15, outerBorderPaint);
+    canvas.drawCircle(center, radius - strokeWidth * 0.85, innerBorderPaint);
+
+    // Barra de progreso
     final progressPaint = Paint()
       ..color = progressColor
       ..style = PaintingStyle.stroke
-      ..strokeWidth = strokeWidth
+      ..strokeWidth = strokeWidth * 0.4
       ..strokeCap = StrokeCap.round;
 
-    final rect = Rect.fromCircle(center: center, radius: radius);
+    final rect = Rect.fromCircle(center: center, radius: radius - strokeWidth / 2);
     final startAngle = -pi / 2;
     final sweepAngle = progress * 2 * pi;
 
+    // Dibujar el arco de progreso
     canvas.drawArc(rect, startAngle, sweepAngle, false, progressPaint);
+
+    // Dibujar el círculo interior
+  
+    
+    
+    // Dibujar el icono de reloj (puedes reemplazarlo con el ícono que prefieras)
+    
   }
 
   @override
@@ -627,23 +704,33 @@ class IncorrectAnswerDialog extends StatelessWidget {
                   fit: BoxFit.contain,
                 ),
                 SizedBox(height: screenHeight * 0.02),
-                SizedBox(
-                  width: buttonWidth,
-                  height: buttonHeight,
+                // Botón con texto en dos líneas
+                Container(
+                  width: buttonWidth * 1.2, // Un poco más ancho para acomodar el texto
+                  height: buttonHeight * 1.2, // Un poco más alto para dos líneas
+                  margin: EdgeInsets.symmetric(horizontal: screenWidth * 0.01),
                   child: ElevatedButton(
                     style: ElevatedButton.styleFrom(
                       backgroundColor: const Color(0xFF176BAB),
                       shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(buttonHeight / 2),
+                        borderRadius: BorderRadius.circular(30),
                       ),
+                      padding: EdgeInsets.zero, // Eliminamos el padding para más control
                     ),
                     onPressed: onRetry,
-                    child: Text(
-                      'Inténtalo\nde nuevo',
-                      textAlign: TextAlign.center,
-                      style: TextStyle(
-                        fontSize: screenWidth * 0.04,
-                        color: Colors.white,
+                    child: Center(
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 8.0),
+                        child: Text(
+                          'Inténtalo\nde nuevo',
+                          textAlign: TextAlign.center,
+                          style: TextStyle(
+                            fontSize: screenWidth * 0.034, // Tamaño de fuente ajustado
+                            color: Colors.white,
+                            fontWeight: FontWeight.w600,
+                            height: 1.1, // Espaciado entre líneas ajustado
+                          ),
+                        ),
                       ),
                     ),
                   ),

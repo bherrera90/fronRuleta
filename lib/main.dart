@@ -2,14 +2,18 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:ruleta/scr/RuletaGame.dart';
 import 'dart:io';
-import 'package:ruleta/scr/final.dart';
+// import 'package:ruleta/scr/final.dart';
 import 'package:ruleta/services/ruleta_api_service.dart';
 import 'package:ruleta/models/api_models.dart';
+import 'package:ruleta/widget_loader.dart';
 import 'package:audioplayers/audioplayers.dart';
 import 'dart:math';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+
+  // Forzar la inclusión de todos los widgets en release
+  WidgetLoader.forceIncludeAllWidgets();
 
   // Configurar orientación
   await SystemChrome.setPreferredOrientations([
@@ -84,7 +88,7 @@ class _MentalHealthWheelState extends State<MentalHealthWheel> with WidgetsBindi
   final AudioPlayer _audioPlayer = AudioPlayer();
   List<int> _ordenCategorias = [];
   int _progresoActual = 0;
-  bool _showContent = true;
+  final bool _showContent = true;
 
   @override
   void initState() {
@@ -95,14 +99,14 @@ class _MentalHealthWheelState extends State<MentalHealthWheel> with WidgetsBindi
   }
 
   void _generarOrdenAleatorio() {
-    List<String> _items = [
+    List<String> items = [
       'Mente Sana',
       'Curiosamente',
       'Mitos Desmentidos',
       'Q+VE',
       'Clave Mental',
     ];
-    _ordenCategorias = List.generate(_items.length, (i) => i)..shuffle();
+    _ordenCategorias = List.generate(items.length, (i) => i)..shuffle();
     _progresoActual = 0;
   }
 
@@ -160,7 +164,7 @@ class _MentalHealthWheelState extends State<MentalHealthWheel> with WidgetsBindi
     final double iconSize = screenWidth * 0.08;
     final double titleWidth = screenWidth * 0.7;
     final double gifWidth = screenWidth * 0.9;
-    final double fontSize = screenWidth * 0.045;
+
     
     // Espaciados responsivos
     final double topSpacing = screenHeight * 0.06;
@@ -181,19 +185,7 @@ class _MentalHealthWheelState extends State<MentalHealthWheel> with WidgetsBindi
             ),
           ),
 
-          // Botón de retroceso
-          Positioned(
-            top: titleSpacing,
-            left: screenWidth * 0.04,
-            child: SafeArea(
-              child: IconButton(
-                icon: Icon(Icons.arrow_back, color: Colors.black, size: iconSize),
-                onPressed: () => Navigator.of(context).pop(),
-                tooltip: 'Retroceder',
-              ),
-            ),
-          ),
-          
+
           // Botón X para cerrar la app
           Positioned(
             top: titleSpacing,
@@ -239,9 +231,10 @@ class _MentalHealthWheelState extends State<MentalHealthWheel> with WidgetsBindi
                   textAlign: TextAlign.center,
                   style: TextStyle(
                     fontFamily: 'Montserrat',
-                    fontWeight: FontWeight.w600,
+                    fontWeight: FontWeight.w900,
                     color: Colors.white,
-                    fontSize: fontSize,
+                    fontSize: min(screenWidth * 0.048, 20.0),
+                    height: 1.2,
                   ),
                 ),
                 SizedBox(height: textSpacing),
@@ -288,13 +281,16 @@ class _MentalHealthWheelState extends State<MentalHealthWheel> with WidgetsBindi
                           ),
                         );
                       },
-                      child: Text(
+                        child: FittedBox(
+                        fit: BoxFit.scaleDown,
+                        child: Text(
                         'Comenzar',
                         style: TextStyle(
                           fontFamily: 'Montserrat',
                           fontWeight: FontWeight.w500,
                           color: Colors.black,
-                          fontSize: fontSize,
+                          fontSize: min(screenWidth * 0.05, 22.0),
+                          ),
                         ),
                       ),
                     ),

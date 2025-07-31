@@ -4,51 +4,32 @@ import 'package:http/http.dart' as http;
 import '../models/api_models.dart';
 
 String normalizarCategoria(String nombre) {
-  switch (nombre) {
-    case 'Curiosamente Mental':
-    case 'Curiosamente':
-      return 'Curiosa Mente';
-    default:
-      return nombre;
-  }
+  // No normalizar nombres, usar exactamente como vienen de la API
+  return nombre;
 }
 
 class RuletaApiService {
   // ============= CONFIGURACIÓN DINÁMICA DE IP =============
   
-  // Ahora solo se usa el túnel de DevTunnels para la API:
+  // URL productiva única para la API:
   static const List<String> _possibleBaseUrls = [
-    // 🌐 PRODUCCIÓN (URL de la nube)
-    //'https://ruleta-backend-o3i2.onrender.com/api',    // Render - URL de producción
-    //'https://ruleta-backend.up.railway.app/api',       // Railway - URL alternativa
-    
-    // 🏠 DESARROLLO LOCAL
-    //'http://localhost:3000/api',           // Para emulador/desarrollo local
-    //'http://10.0.2.2:3000/api',          // Para emulador Android
-    //'http://192.168.1.100:3000/api',     // IP común en redes domésticas
-    //'http://192.168.0.100:3000/api',     // IP alternativa
-    //'http://192.168.1.101:3000/api',     // Otra IP común
-    //'http://192.168.0.101:3000/api',     // Otra IP alternativa
-   // 'http://192.168.1.102:3000/api',     // Más IPs comunes
-    //'http://192.168.0.102:3000/api',     // Más IPs comunesx
-    'https://dls92kmj-3003.use2.devtunnels.ms/api', // Túnel actual para desarrollo
+    'https://dls92kmj-3001.use2.devtunnels.ms/api', // URL productiva
   ];
 
   // URL base actual (se detecta automáticamente)
   static String _currentBaseUrl = _possibleBaseUrls.first;
   
   // Obtener la URL base actual
-  static String get baseUrl => _currentBaseUrl;
+  static String get baseUrl {
+    print('🔗 URL actual: $_currentBaseUrl');
+    return _currentBaseUrl;
+  }
   
   // Inicializar y detectar la mejor URL disponible
   static Future<void> initialize() async {
-    final workingUrl = await _detectWorkingUrl();
-    if (workingUrl != null) {
-      _currentBaseUrl = workingUrl;
-      print('🚀 Backend configurado en: $_currentBaseUrl');
-    } else {
-      print('⚠️ Usando URL por defecto: $_currentBaseUrl');
-    }
+    // Usar siempre la URL productiva: https://dls92kmj-3003.use2.devtunnels.ms/api
+    _currentBaseUrl = 'https://dls92kmj-3001.use2.devtunnels.ms/api';
+    print('🚀 URL PRODUCTIVA CONFIGURADA: $_currentBaseUrl');
   }
   
   // Configurar URL personalizada
@@ -118,6 +99,7 @@ static const Duration timeout = Duration(seconds: 20);
   // Implementación con reintentos automáticos y timeout aumentado
 static Future<List<RuletaCategory>> getCategories({int retries = 2}) async {
     print('[DEBUG] Iniciando getCategories()');
+    print('[DEBUG] URL base actual: $baseUrl');
     try {
       final url = '$baseUrl/ruleta/categories';
       print('[GET] $url');
@@ -146,7 +128,9 @@ static Future<List<RuletaCategory>> getCategories({int retries = 2}) async {
       // Actualizar caché de categorías
       _categoriesCache.clear();
       for (var category in categories) {
-        _categoriesCache[normalizarCategoria(category.name)] = category;
+        final normalizedName = normalizarCategoria(category.name);
+        _categoriesCache[normalizedName] = category;
+        print('[CACHE] Agregando a caché: "$category.name" -> "$normalizedName" (ID: ${category.id})');
       }
           
       print('[DEBUG] Categorías procesadas: ${categories.map((c) => c.name).toList()}');
@@ -184,12 +168,19 @@ static Future<List<RuletaCategory>> getCategories({int retries = 2}) async {
   /// Obtiene el ID de una categoría por su nombre
   /// Devuelve null si la categoría no se encuentra
   static Future<int?> getCategoryIdByName(String categoryName) async {
+    print('[SEARCH] Buscando categoría: "$categoryName"');
     // Normalizar el nombre antes de buscar
     categoryName = normalizarCategoria(categoryName);
+    print('[SEARCH] Nombre normalizado: "$categoryName"');
+    
     // Si ya tenemos las categorías en caché, usarlas
     if (_categoriesCache.isEmpty) {
+      print('[SEARCH] Caché vacía, cargando categorías...');
       await getCategories();
     }
+    
+    print('[SEARCH] Caché actual: ${_categoriesCache.keys.toList()}');
+    
     // Buscar la categoría por nombre (insensible a mayúsculas/minúsculas)
     final category = _categoriesCache.entries
         .firstWhere(
@@ -204,6 +195,7 @@ static Future<List<RuletaCategory>> getCategories({int retries = 2}) async {
         );
     if (category.key.isEmpty) {
       print('[WARNING] No se encontró la categoría: $categoryName');
+      print('[WARNING] Categorías disponibles en caché: ${_categoriesCache.keys.toList()}');
       return null;
     }
     print('[DEBUG] ID encontrado para categoría "$categoryName": ${category.value.id}');
