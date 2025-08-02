@@ -122,7 +122,7 @@ class _RouletteScreenState extends State<RouletteScreen>
     _generarUsuarioActual(); // Generar usuario actual
     _controller = AnimationController(
       vsync: this,
-      duration: const Duration(seconds: 6),
+      duration: const Duration(seconds: 4),
     );
 
     _animation = Tween<double>(begin: 0, end: 0).animate(_controller)
@@ -133,6 +133,17 @@ class _RouletteScreenState extends State<RouletteScreen>
           }))
       ..addStatusListener((status) async {
         if (status == AnimationStatus.completed) {
+
+             if (_isSoundOn) {
+
+            await _spinAudioPlayer.stop();
+
+            _audioPlayer.resume();
+
+          }
+          
+
+
           final finalAngle = _animation.value;
           final finalIndex = _targetCategoryIndex;
           final labelBajoSelector = finalIndex != null ? _items[finalIndex].label : 'null';
@@ -145,7 +156,7 @@ class _RouletteScreenState extends State<RouletteScreen>
               _highlightedIndex = objetivo;
               _selectedOption = _items[objetivo].label;
               _isSpinning = false;
-              _isSpinButtonEnabled = true; // Asegurar que el botón se habilite
+              // _isSpinButtonEnabled se habilitará al regresar
             });
             _startBlinkingEffect();
           } else {
@@ -164,7 +175,7 @@ class _RouletteScreenState extends State<RouletteScreen>
             await player.play(AssetSource('sounds/Sonidocuandoseescogecategoria.mp3'));
           }
 
-              _redirectionTimer = Timer(const Duration(milliseconds: 1500), () {
+              _redirectionTimer = Timer(const Duration(milliseconds: 1000), () {
       if (mounted) {
         print('TIMER EJECUTADO: Llamando a _navigateToSelected()');
         _navigateToSelected();
@@ -584,10 +595,12 @@ class _RouletteScreenState extends State<RouletteScreen>
       _showDarkOverlay = false; // Ocultar la capa oscura al girar
       _stopBlinkingEffect();
     });
+    
     // --- SONIDO DE GIRO ---
     if (_isSoundOn) {
-      _audioPlayer.pause(); // Pausa el fondo
-      _spinAudioPlayer.stop(); // Por si acaso
+      _audioPlayer.pause(); // Pausa el fondo 
+      //_spinAudioPlayer.stop(); // Por si acaso
+      _spinAudioPlayer.setReleaseMode(ReleaseMode.loop); // Configura el audio para que se repita
       _spinAudioPlayer.play(AssetSource('sounds/Ruletaenmovimiento02.mp3'));
       // Detener el sonido de la ruleta después de 5 segundos y reanudar fondo
       Future.delayed(const Duration(seconds: 5), () async {
@@ -603,7 +616,7 @@ class _RouletteScreenState extends State<RouletteScreen>
     _targetCategoryLabel = _items[targetIndex].label;
     // Calcula el ángulo para que ese sector quede bajo el selector (arriba)
     final sectorAngle = 360.0 / _items.length;
-    final baseRotation = 360.0 * (10 + Random().nextInt(3));
+    final baseRotation = 360.0 * (15 + Random().nextInt(3));
     final centerAngleOfSector = (targetIndex * sectorAngle) + (sectorAngle / 2);
     // El ángulo final debe poner el sector objetivo en 0 grados (arriba)
     final targetAngle = _currentRotationAngle + baseRotation + (360 - centerAngleOfSector) - (_currentRotationAngle % 360);
@@ -641,7 +654,7 @@ class _RouletteScreenState extends State<RouletteScreen>
         }
       }));
     _currentRotationAngle = targetAngle % 360;
-    _controller.duration = const Duration(seconds: 5);
+    _controller.duration = const Duration(seconds: 3);
     _controller.reset();
     _controller.forward();
   }
@@ -649,190 +662,112 @@ class _RouletteScreenState extends State<RouletteScreen>
 
 
   void _navigateToSelected() async {
-    print('=== INICIO _navigateToSelected ===');
-    print('_selectedOption: $_selectedOption');
-    if (_selectedOption == null) {
-      print('ERROR: _selectedOption es null, no navegando');
-      return;
+  print('=== INICIO _navigateToSelected ===');
+  if (_selectedOption == null) return;
+
+  if (_categoriasJugadas.contains(_selectedOption!)) {
+    setState(() {
+      _selectedOption = null;
+      _highlightedIndex = null;
+    });
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text('Esta categoría ya fue completada, vuelve a girar'),
+        backgroundColor: Colors.red,
+        duration: Duration(seconds: 2),
+      ),
+    );
+    return;
+  }
+/*
+  setState(() {
+    _isSpinButtonEnabled = false;
+  });
+  */
+
+  _redirectionTimer?.cancel();
+  _redirectionTimer = Timer(const Duration(seconds: 1), () {
+    Widget destination;
+    if (WidgetLoader.isCategorySupported(_selectedOption!)) {
+      destination = WidgetLoader.createWidget(_selectedOption!);
+    } else {
+      destination = Scaffold(
+        appBar: AppBar(title: const Text('Categoría no encontrada')),
+        body: Center(child: Text('No se encontró pantalla para: $_selectedOption')),
+      );
     }
 
-    // DEBUG: Mostrar información de depuración
-    print('=== DEBUG NAVEGACIÓN ===');
-    print('Categoría seleccionada: "$_selectedOption"');
-    print('_highlightedIndex actual: $_highlightedIndex');
-    print('Categoría en _highlightedIndex: ${_highlightedIndex != null ? _items[_highlightedIndex!].label : "null"}');
-    print('_preSelectedIndex: $_preSelectedIndex');
-    print('_preSelectedOption: $_preSelectedOption');
-    print('Categorías jugadas: $_categoriasJugadas');
-    print('Contiene categoría: ${_categoriasJugadas.contains(_selectedOption!)}');
-    
-    // VERIFICACIÓN ADICIONAL: Si la categoría ya fue jugada, no permitir acceso
-    if (_categoriasJugadas.contains(_selectedOption!)) {
-      print('BLOQUEO ACTIVADO: Categoría $_selectedOption ya fue jugada. Bloqueando acceso.');
-      setState(() {
-        _isSpinButtonEnabled = true;
-        _selectedOption = null;
-        _highlightedIndex = null;
-      });
-      // Mostrar un mensaje visual al usuario
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Esta categoría ya fue completada, vuelve a girar'),
-          backgroundColor: Colors.red,
-          duration: Duration(seconds: 2),
-        ),
-      );
-      return;
-    }
-  
-    setState(() {
-      _isSpinButtonEnabled = false;
-    });
-    _redirectionTimer?.cancel();
-    _redirectionTimer = Timer(const Duration(seconds: 2), () {
-      print('=== TIMER EJECUTADO - Creando destino ===');
-      Widget destination;
-      print('SWITCH DEBUG: Evaluando switch con _selectedOption: "$_selectedOption"');
-      print('SWITCH DEBUG: Tipo de _selectedOption: ${_selectedOption.runtimeType}');
-      print('SWITCH DEBUG: Longitud de _selectedOption: ${_selectedOption?.length}');
-      print('SWITCH DEBUG: Códigos ASCII de _selectedOption: ${_selectedOption?.codeUnits}');
-      print('SWITCH DEBUG: _selectedOption == "Curiosamente Mental": ${_selectedOption == "Curiosamente Mental"}');
-      print('SWITCH DEBUG: _selectedOption == "Curiosamente": ${_selectedOption == "Curiosamente"}');
-      
-      try {
-        print('FACTORY DEBUG: Intentando crear widget para: "$_selectedOption"');
-        
-        // Verificar si la categoría es soportada
-        if (WidgetLoader.isCategorySupported(_selectedOption!)) {
-          print('WIDGET_LOADER DEBUG: Categoría soportada, creando widget...');
-          destination = WidgetLoader.createWidget(_selectedOption!);
-          print('WIDGET_LOADER DEBUG: Widget creado exitosamente: ${destination.runtimeType}');
-        } else {
-          print('WIDGET_LOADER DEBUG: Categoría no soportada: "$_selectedOption"');
-          print('WIDGET_LOADER DEBUG: Categorías soportadas: ${WidgetLoader.getAvailableCategories()}');
-          destination = Scaffold(
-            appBar: AppBar(title: const Text('Categoría no encontrada')),
-            body: Center(child: Text('No se encontró pantalla para: $_selectedOption')),
-          );
-        }
-      } catch (e) {
-        print('ERROR en factory: $e');
-        print('ERROR en factory: Stack trace: ${StackTrace.current}');
-        destination = Scaffold(
-          appBar: AppBar(title: const Text('Error')),
-          body: Center(child: Text('Error al crear destino: $e')),
-        );
-      }
-      print('NAVEGACIÓN FINAL: Navegando a quiz de categoría: $_selectedOption');
-      print('NAVEGACIÓN FINAL: Widget destino: ${destination.runtimeType}');
-    
-    // Detener el audio antes de navegar a otra pantalla
     _audioPlayer.pause();
 
-    print('=== EJECUTANDO Navigator.push ===');
+    
+  
     Navigator.push(
       context,
       MaterialPageRoute(builder: (_) => destination),
     ).then((resultado) {
-      print('=== NAVEGACIÓN COMPLETADA - resultado: $resultado ===');
-      
-      // Asegurar que el modo de pantalla se mantenga al regresar del quiz
-      SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
-      
       if (mounted) {
         setState(() {
           bool juegoCompletado = false;
-          
+
           if (resultado == 1 && _selectedOption != null) {
-            // Respuesta correcta
             _categoriasJugadas.add(_selectedOption!);
             _puntos++;
             _progresoActual++;
-            
-            // Verificar si todas las categorías han sido completadas correctamente
+
             if (_categoriasJugadas.length >= _items.length) {
               juegoCompletado = true;
-              print('✅ Todas las categorías completadas correctamente');
             } else if (_progresoActual >= _ordenCategorias.length) {
-              // Si se completó el orden actual pero aún hay categorías por responder
-              print('🔄 Generando nuevo orden con las categorías restantes');
               _generarOrdenAleatorio(mantenerProgreso: true);
-              print('Nuevo orden generado con ${_ordenCategorias.length} categorías restantes');
             }
           } else if (resultado == 0) {
-            // Respuesta incorrecta - Generar nuevo orden aleatorio
-            print('❌ Respuesta incorrecta, generando nuevo orden');
-            
-            // No incrementar el progreso en respuestas incorrectas
-            // Solo generar un nuevo orden con las categorías pendientes
-            final _ = _ordenCategorias.length; // Solo para referencia de depuración
             _generarOrdenAleatorio(mantenerProgreso: true);
-            
-            print('🔀 Nuevo orden aleatorio generado después de respuesta incorrecta');
-            print('Se mantienen las ${_categoriasJugadas.length} categorías ya completadas');
-            print('Categorías en el nuevo orden (${_ordenCategorias.length}): ${_ordenCategorias.map((i) => _items[i].label).toList()}');
-            
-            // Si el progreso era mayor que el número de categorías, reiniciarlo
             if (_progresoActual >= _ordenCategorias.length) {
               _progresoActual = 0;
-              print('🔄 Progreso reiniciado a 0 porque excedía el número de categorías');
             }
           }
-          
-// Asegurarse de que el botón de girar esté habilitado
+
           _isSpinButtonEnabled = true;
           _selectedOption = null;
           _highlightedIndex = null;
-          _showDarkOverlay = true; // Asegurar que la capa oscura sea visible
-          
-          // Verificar si hay categorías disponibles para girar
+          _showDarkOverlay = true;
+
           final categoriasDisponibles = _items.where((item) => !_categoriasJugadas.contains(item.label)).toList();
           if (categoriasDisponibles.isEmpty) {
-            print('⚠️ No hay más categorías disponibles para jugar');
             juegoCompletado = true;
-          } else {
-            print('🔄 Categorías disponibles para el próximo giro: ${categoriasDisponibles.map((e) => e.label).toList()}');
           }
-          
-          // Si el juego está completado, navegar a la pantalla final
+
           if (juegoCompletado) {
-            // Determinar el mensaje según los puntos y el usuario
             String mensajeFinal;
             String textoSecundario;
-            
             if (_puntos >= 5 && _esMismoUsuario) {
               mensajeFinal = '¡Gracias por participar!';
               textoSecundario = '+5 puntos, por tu gran\ndesempeño.';
-              print('🎯 Usuario con 5 puntos y mismo usuario: Mostrando mensaje de éxito');
             } else {
               mensajeFinal = '¡Gracias por participar!';
               textoSecundario = 'Cada vez está más cerca\nde conocer sobre tu salud mental';
-              print('📈 Usuario sin 5 puntos o usuario diferente: Mostrando mensaje de motivación');
             }
-            
-            // Usar un post-frame callback para asegurar que el setState se complete
             WidgetsBinding.instance.addPostFrameCallback((_) {
               Navigator.pushReplacement(
                 context,
-                MaterialPageRoute(builder: (_) => PantallaFinJuego(
-                  mensajeFinal: mensajeFinal,
-                  rutaImagen: 'assets/animations/copa-con-confetti.gif',
-                  textoSecundario: textoSecundario,
-                )),
+                MaterialPageRoute(
+                  builder: (_) => PantallaFinJuego(
+                    mensajeFinal: mensajeFinal,
+                    rutaImagen: 'assets/animations/copa-con-confetti.gif',
+                    textoSecundario: textoSecundario,
+                  ),
+                ),
               );
             });
           }
         });
-        
-        // Reanudar el audio cuando regrese de la pantalla de quiz
+
         if (_isSoundOn) {
           _audioPlayer.resume();
         }
       }
-      });
     });
-  }
-
+  });
+}
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this); // <-- Elimina el observer
@@ -954,7 +889,7 @@ class _RouletteScreenState extends State<RouletteScreen>
               ),
               SizedBox(height: smallSpacing),
               // Ruleta centrada
-              SizedBox(height: titleSpacing),
+              //SizedBox(height: titleSpacing),
 
               Text(
                 'Pon a prueba tu mente\nen cada pregunta',
@@ -967,7 +902,7 @@ class _RouletteScreenState extends State<RouletteScreen>
                   height: 1.2,
                 ),
               ),
-              SizedBox(height: textSpacing),
+              SizedBox(height: 24),
 
 
               Center(
@@ -1046,6 +981,57 @@ class _RouletteScreenState extends State<RouletteScreen>
                   ),
                 ),
               ),
+
+              SizedBox(height: 10),
+              // Contador de puntos debajo de la ruleta
+              Container(
+                margin: EdgeInsets.only(top: 16, bottom: 16),
+                padding: EdgeInsets.symmetric(horizontal: 24, vertical: 10),
+                decoration: BoxDecoration(
+                  color: Colors.white24,
+                  borderRadius: BorderRadius.circular(20),
+                  border: Border.all(color: Colors.white.withOpacity(0.3), width: 1.5),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withOpacity(0.3),
+                      blurRadius: 10,
+                      offset: Offset(0, 3),
+                    ),
+                  ],
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      'Puntos: ',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontWeight: FontWeight.w600,
+                        fontSize: min(screenWidth * 0.042, 17.0),
+                        letterSpacing: 0.5,
+                      ),
+                    ),
+                    Text(
+                      '$_puntos/5',
+                      style: TextStyle(
+                        color: Colors.yellow[300],
+                        fontWeight: FontWeight.bold,
+                        fontSize: min(screenWidth * 0.048, 19.0),
+                        letterSpacing: 0.5,
+                        shadows: [
+                          Shadow(
+                            color: Colors.black.withOpacity(0.5),
+                            offset: Offset(0, 1),
+                            blurRadius: 2,
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              // Espacio entre el contador y el botón de girar
+              SizedBox(height: 10),
               const Spacer(flex: 3),
             ],
           ),
@@ -1080,6 +1066,13 @@ class WheelPainter extends CustomPainter {
     Color(0xFFF97C34), // Naranja - Clave Mental
     Color(0xFF784BAA), // Morado - Mitos Desmentidos
   ];
+
+  // Devuelve una versión más oscura del color manteniendo opacidad completa
+  Color _darken(Color color, [double amount = .00]) {
+    final hsl = HSLColor.fromColor(color);
+    final hslDark = hsl.withLightness((hsl.lightness - amount).clamp(0.0, 1.0));
+    return hslDark.toColor();
+  }
 
   // Función para formatear el texto según las especificaciones
   String _getFormattedText(String label) {
@@ -1129,6 +1122,7 @@ class WheelPainter extends CustomPainter {
   void paint(Canvas canvas, Size size) {
     final center = Offset(size.width / 2, size.height / 2);
     final radius = size.width / 2;
+    
     final sectorAngle = 2 * pi / items.length;
     final paint = Paint()..style = PaintingStyle.fill;
 
@@ -1149,7 +1143,8 @@ class WheelPainter extends CustomPainter {
 
         // Si la categoría ya fue jugada, usa el color base con opacidad 0.25 (muy oscuro)
       if (categoriasJugadas.contains(items[i].label)) {
-        paint.color = _getColorForCategory(items[i].label).withOpacity(0.50);
+        // Sector jugado: color opaco más oscuro
+        paint.color = _darken(baseColor, 0.08);
       } else if (i == highlightedIndex && isBlinking && blinkIntensity == 1.0) {
         // Glow fuerte (prendido)
         double glowIntensity = 0.8 + (blinkIntensity * 0.2);
@@ -1183,7 +1178,7 @@ class WheelPainter extends CustomPainter {
       } else {
         // Sin glow (apagado)
         paint.color = categoriasJugadas.contains(items[i].label)
-            ? _getColorForCategory(items[i].label).withOpacity(0.25)
+            ? _darken(baseColor, 0.08)
             : baseColor.withOpacity(1.0);
       }
 

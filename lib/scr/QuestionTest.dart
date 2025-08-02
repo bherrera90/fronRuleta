@@ -213,7 +213,7 @@ class _QuestionTestQuizState extends State<QuestionTestQuiz>
 
     if (selectedText == _correctAnswer) {
       _onCorrectAnswer();
-      Future.delayed(const Duration(seconds: 3), () {
+      Future.delayed(const Duration(milliseconds: 1500), () {
         if (mounted) {
           Navigator.pop(context, 1);
         }
@@ -439,7 +439,7 @@ class _QuestionTestQuizState extends State<QuestionTestQuiz>
               _currentQuestion!.question,
               style: TextStyle(
                 fontFamily: 'Montserrat',
-                fontSize: screenWidth * 0.05,
+                fontSize: screenWidth * 0.045,
                 fontWeight: FontWeight.bold,
                 color: const Color(0xFF28367F),
               ),
@@ -482,7 +482,7 @@ class _QuestionTestQuizState extends State<QuestionTestQuiz>
               _currentQuestion!.question,
               style: TextStyle(
                 fontFamily: 'Montserrat',
-                fontSize: screenWidth * 0.05,
+                fontSize: screenWidth * 0.045,
                 fontWeight: FontWeight.bold,
                 color: const Color(0xFF28367F),
               ),
@@ -561,6 +561,7 @@ class _QuestionTestQuizState extends State<QuestionTestQuiz>
     );
   }
 }
+
 
 // CustomPainter para el timer circular
 class TimerPainter extends CustomPainter {
@@ -669,7 +670,7 @@ class IncorrectAnswerDialog extends StatelessWidget {
               mainAxisSize: MainAxisSize.min,
               children: [
                 Image.asset(
-                  'assets/images/TITULO TRIVIA.png',
+                  'assets/images/textoRuleta.png',
                   width: screenWidth * 0.60,
                   height: screenWidth * 0.14,
                   fit: BoxFit.contain,
@@ -704,7 +705,7 @@ class IncorrectAnswerDialog extends StatelessWidget {
                           style: TextStyle(
                             fontSize: screenWidth * 0.034, // Tamaño de fuente ajustado
                             color: Colors.white,
-                            fontWeight: FontWeight.w600,
+                            fontWeight: FontWeight.w500,
                             height: 1.1, // Espaciado entre líneas ajustado
                           ),
                         ),

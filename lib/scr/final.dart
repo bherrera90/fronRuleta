@@ -69,27 +69,30 @@ class _PantallaFinJuegoState extends State<PantallaFinJuego> with TickerProvider
   Widget build(BuildContext context) {
     final screenWidth = MediaQuery.of(context).size.width;
     final screenHeight = MediaQuery.of(context).size.height;
-    // final titleHeight = screenHeight * 0.12; // Reducido - Comentado porque no se usa
-    final imagenSize = screenWidth * 0.75; // Reducido para evitar overflow
+    final imagenSize = screenWidth * 0.75;
     final String textoSecundario = widget.textoSecundario ?? '+5 puntos, por tu gran\ndesempeño.';
     print('LOG: Mostrando mensaje secundario en PantallaFinJuego: $textoSecundario');
 
     return Scaffold(
-       body: Stack(
-        children: [
-            // Fondo de pantalla (cubre toda la pantalla)
-            Positioned.fill(
-              child: Image.asset(
-                'assets/images/back-azul-salud-menatl.png',
-                fit: BoxFit.cover,
-              ),
-            ),
-          
-        // Contenido principal
-        Expanded(
-          child: Stack(
-            clipBehavior: Clip.none,
-            children: [
+      body: Container(
+        width: double.infinity,
+        height: double.infinity,
+        decoration: BoxDecoration(
+          image: DecorationImage(
+            image: AssetImage('assets/images/back-azul-salud-menatl.png'),
+            fit: BoxFit.cover,
+          ),
+        ),
+        child: SafeArea(
+          child: LayoutBuilder(
+            builder: (context, constraints) {
+              return SingleChildScrollView(
+                child: ConstrainedBox(
+                  constraints: BoxConstraints(
+                    minHeight: constraints.maxHeight,
+                  ),
+                  child: Stack(
+                    children: [
               // Contenedor blanco
               Container(
                 margin: EdgeInsets.only(
@@ -226,12 +229,14 @@ class _PantallaFinJuegoState extends State<PantallaFinJuego> with TickerProvider
                   ),
                 ),
               ),
-            ],
+                    ],
+                  ),
+                ),
+              );
+            },
           ),
         ),
-        ],
       ),
-  
     );
   }
 }
